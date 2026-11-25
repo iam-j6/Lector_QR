@@ -1,0 +1,71 @@
+import os
+import json
+from flask import Flask, render_template, request, jsonify
+import gspread
+from google.oauth2.service_account import Credentials
+
+app = Flask(__name__)
+
+SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
+
+def get_sheets_client():
+    creds_json = os.environ.get("GOOGLE_CREDENTIALS_JSON")
+    if creds_json:
+        creds_dict = json.loads(creds_json)
+        if "private_key" in creds_dict:
+            creds_dict["private_key"] = creds_dict["private_key"].replace("\\n", "\n")
+        creds = Credentials.from_service_account_info(creds_dict, scopes=SCOPES)
+    else:
+        creds = Credentials.from_service_account_file("credentials.json", scopes=SCOPES)
+    
+    client = gspread.authorize(creds)
+    sheet_id = os.environ.get("GOOGLE_SHEET_ID")
+    sheet = client.open_by_key(sheet_id).sheet1
+    return sheet
+
+@app.route("/")
+def index():
+    return render_template("index.html")
+
+@app.route("/verify", methods=["POST"])
+def verify():
+    data = request.json
+    qr_code = data.get("qr_code")
+    
+    if not qr_code:
+        return jsonify({"status": "error", "message": "Código QR no válido."}), 400
+
+    try:
+        sheet = get_sheets_client()
+        
+        # CORRECCIÓN: Buscar específicamente en la columna 4 (Columna D)
+        cell = sheet.find(qr_code, in_column=4)
+        
+        if not cell:
+            return jsonify({"status": "not_found", "message": "❌ Entrada no encontrada en el sistema."}), 404
+        
+        row = cell.row
+        # Columnas: A=Timestamp, B=Nombre, C=Correo, D=ID, E=Estado
+        nombre = sheet.cell(row, 2).value
+        estado_actual = sheet.cell(row, 5).value
+        
+        if estado_actual == "Ingresado":
+            return jsonify({
+                "status": "already_used",
+                "message": f"⚠️ ¡Entrada ya utilizada!\n{nombre} ya ingresó antes.",
+                "name": nombre
+            }), 200
+        
+        sheet.update_cell(row, 5, "Ingresado")
+        
+        return jsonify({
+            "status": "success",
+            "message": f"✅ ¡Acceso Concedido!\nBienvenido/a, {nombre}.",
+            "name": nombre
+        }), 200
+
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+if __name__ == "__main__":
+    app.run(debug=True)
