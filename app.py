@@ -20,7 +20,7 @@ def get_sheets_client():
     
     client = gspread.authorize(creds)
     sheet_id = os.environ.get("GOOGLE_SHEET_ID")
-    sheet = client.open_by_key(sheet_id).sheet1
+    sheet = client.open_by_key(sheet_id).worksheet("Respuestas de formulario 1")
     return sheet
 
 @app.route("/")
