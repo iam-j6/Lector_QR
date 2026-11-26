@@ -30,7 +30,7 @@ def index():
 @app.route("/verify", methods=["POST"])
 def verify():
     data = request.json
-    qr_code = data.get("qr_code")
+    qr_code = str(data.get("qr_code", "")).strip()
     
     if not qr_code:
         return jsonify({"status": "error", "message": "Código QR no válido."}), 400
