@@ -41,55 +41,56 @@ def verify():
         # 1. Obtener todos los IDs de la columna Q (17)
         ids = sheet.col_values(17)
         
-        # --- DIAGNÓSTICO ---
-        # Si la lista está vacía o solo tiene el encabezado, la hoja está mal.
         if len(ids) <= 1:
-            return jsonify({
-                "status": "error", 
-                "message": f"⚠️ La columna Q (17) está VACÍA. Solo encontré: {ids}"
-            }), 400
+            return jsonify({"status": "error", "message": "⚠️ La columna Q (17) está VACÍA."}), 400
             
-        # Vamos a leer las últimas 5 filas para ver qué hay ahí
-        ultimos_ids = ids[-5:]
+        # 2. Buscar TODAS las filas que coincidan con el QR
+        qr_limpio = qr_code.strip().replace(".", "").upper()
+        filas_encontradas = []
         
-        # --- BÚSQUEDA CON LIMPIEZA ---
-        fila_encontrada = None
         for index, valor_celda in enumerate(ids[1:]): # Empezamos desde la fila 2
             valor_limpio = str(valor_celda).strip().replace(".", "").upper()
-            qr_limpio = qr_code.strip().replace(".", "").upper()
-            
             if valor_limpio == qr_limpio and valor_limpio != "":
-                fila_encontrada = index + 2
+                filas_encontradas.append(index + 2) # +2 porque empezamos en la fila 2
+                
+        if not filas_encontradas:
+            return jsonify({"status": "not_found", "message": "❌ Entrada no encontrada en el sistema."}), 404
+        
+        # 3. Revisar las filas para ver si hay al menos una disponible
+        info_persona = ""
+        fila_disponible = None
+        
+        for fila in filas_encontradas:
+            # Leemos las columnas: B(2)=Apellido, C(3)=Nombre, E(5)=Correo, R(18)=Estado
+            apellido = str(sheet.cell(fila, 2).value or "").strip()
+            nombre = str(sheet.cell(fila, 3).value or "").strip()
+            correo = str(sheet.cell(fila, 5).value or "").strip()
+            estado_actual = str(sheet.cell(fila, 18).value or "").strip()
+            
+            # Armamos el texto: Nombre Apellido \n Correo
+            if not info_persona:
+                info_persona = f"{nombre} {apellido}\n{correo}".strip()
+                
+            # Si encontramos una fila que NO esté "Ingresado", la guardamos y paramos de buscar
+            if estado_actual != "Ingresado":
+                fila_disponible = fila
                 break
         
-        if not fila_encontrada:
-            # Si no lo encuentra, te muestra qué fue lo último que leyó de la hoja
-            return jsonify({
-                "status": "not_found", 
-                "message": f"❌ No encontré '{qr_limpio}'.\n\nLo último que leí en la Col Q fue:\n{ultimos_ids}"
-            }), 404
-        
-        # 3. Leer datos
-        apellido = str(sheet.cell(fila_encontrada, 2).value or "")
-        nombre = str(sheet.cell(fila_encontrada, 3).value or "")
-        estado_actual = str(sheet.cell(fila_encontrada, 18).value or "").strip()
-        
-        nombre_completo = f"{nombre} {apellido}".strip()
-        
-        if estado_actual == "Ingresado":
+        # 4. Si NO hay ninguna fila disponible (todas dicen "Ingresado")
+        if not fila_disponible:
             return jsonify({
                 "status": "already_used",
-                "message": f"⚠️ ¡Entrada ya utilizada!\n{nombre_completo} ya ingresó antes.",
-                "name": nombre_completo
+                "message": f"⚠️ ¡Entrada ya utilizada!\n{info_persona} ya ingresó antes.",
+                "name": info_persona
             }), 200
         
-        # 4. Actualizar el estado en la columna R (18)
-        sheet.update_cell(fila_encontrada, 18, "Ingresado")
+        # 5. Si hay una fila disponible, le damos acceso y actualizamos SOLO esa fila
+        sheet.update_cell(fila_disponible, 18, "Ingresado")
         
         return jsonify({
             "status": "success",
-            "message": f"✅ ¡Acceso Concedido!\nBienvenido/a, {nombre_completo}.",
-            "name": nombre_completo
+            "message": f"✅ ¡Acceso Concedido!\nBienvenido/a, {info_persona}.",
+            "name": info_persona
         }), 200
 
     except Exception as e:
