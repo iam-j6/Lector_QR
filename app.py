@@ -62,8 +62,8 @@ def verify():
         
         for fila in filas_encontradas:
             # Leemos las columnas: B(2)=Apellido, C(3)=Nombre, E(5)=Correo, R(18)=Estado
-            apellido = str(sheet.cell(fila, 2).value or "").strip()
-            nombre = str(sheet.cell(fila, 3).value or "").strip()
+            apellido = str(sheet.cell(fila, 3).value or "").strip()
+            nombre = str(sheet.cell(fila, 4).value or "").strip()
             correo = str(sheet.cell(fila, 5).value or "").strip()
             estado_actual = str(sheet.cell(fila, 18).value or "").strip()
             
