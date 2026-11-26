@@ -38,18 +38,26 @@ def verify():
     try:
         sheet = get_sheets_client()
         
-        # CORRECCIÓN: Buscar en la columna 17 (Columna Q)
-        cell = sheet.find(qr_code, in_column=17)
+        # 1. Obtener todos los IDs de la columna Q (17) de una vez
+        ids = sheet.col_values(17)[1:] 
         
-        if not cell:
+        fila_encontrada = None
+        for index, valor_celda in enumerate(ids):
+            # 2. Limpieza extrema: quitamos espacios, puntos y pasamos a mayúsculas
+            valor_limpio = str(valor_celda).strip().replace(".", "").upper()
+            qr_limpio = qr_code.strip().replace(".", "").upper()
+            
+            if valor_limpio == qr_limpio and valor_limpio != "":
+                fila_encontrada = index + 2 # +2 porque empezamos desde la fila 2
+                break
+        
+        if not fila_encontrada:
             return jsonify({"status": "not_found", "message": "❌ Entrada no encontrada en el sistema."}), 404
         
-        row = cell.row
-        # CORRECCIÓN: Ajustamos las columnas a tu hoja real
-        # Columna 3 = Nombre (C), Columna 4 = Apellido (D), Columna 18 = Estado (R)
-        nombre = sheet.cell(row, 3).value
-        apellido = sheet.cell(row, 4).value
-        estado_actual = sheet.cell(row, 18).value
+        # 3. Leer datos (Según tu imagen: B=Apellido, C=Nombre, R=Estado)
+        apellido = str(sheet.cell(fila_encontrada, 2).value or "")
+        nombre = str(sheet.cell(fila_encontrada, 3).value or "")
+        estado_actual = str(sheet.cell(fila_encontrada, 18).value or "").strip()
         
         nombre_completo = f"{nombre} {apellido}".strip()
         
@@ -60,8 +68,8 @@ def verify():
                 "name": nombre_completo
             }), 200
         
-        # CORRECCIÓN: Actualizar el estado en la columna 18 (R)
-        sheet.update_cell(row, 18, "Ingresado")
+        # 4. Actualizar el estado en la columna R (18)
+        sheet.update_cell(fila_encontrada, 18, "Ingresado")
         
         return jsonify({
             "status": "success",
