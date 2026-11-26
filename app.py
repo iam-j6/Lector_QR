@@ -38,6 +38,54 @@ def verify():
     try:
         sheet = get_sheets_client()
         
+        # Buscamos en la columna 4
+        cell = sheet.find(qr_code, in_column=4)
+        
+        if not cell:
+            # Si no lo encuentra, revisamos si lo encuentra en CUALQUIER lugar
+            busqueda_global = sheet.find(qr_code)
+            if busqueda_global:
+                return jsonify({
+                    "status": "not_found", 
+                    "message": f"⚠️ Encontré el QR, pero está en la Columna {busqueda_global.col}. Debe estar en la Columna D (4)."
+                }), 404
+            else:
+                return jsonify({
+                    "status": "not_found", 
+                    "message": f"❌ No encontré '{qr_code}' en ninguna parte de la hoja. ¿Estás en la pestaña correcta?"
+                }), 404
+        
+        # Si lo encuentra, continúa normal...
+        row = cell.row
+        nombre = sheet.cell(row, 2).value
+        estado_actual = sheet.cell(row, 5).value
+        
+        if estado_actual == "Ingresado":
+            return jsonify({
+                "status": "already_used",
+                "message": f"⚠️ ¡Entrada ya utilizada!\n{nombre} ya ingresó antes.",
+                "name": nombre
+            }), 200
+        
+        sheet.update_cell(row, 5, "Ingresado")
+        
+        return jsonify({
+            "status": "success",
+            "message": f"✅ ¡Acceso Concedido!\nBienvenido/a, {nombre}.",
+            "name": nombre
+        }), 200
+
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+    data = request.json
+    qr_code = str(data.get("qr_code", "")).strip()
+    
+    if not qr_code:
+        return jsonify({"status": "error", "message": "Código QR no válido."}), 400
+
+    try:
+        sheet = get_sheets_client()
+        
         # CORRECCIÓN: Buscar específicamente en la columna 4 (Columna D)
         cell = sheet.find(qr_code, in_column=4)
         
