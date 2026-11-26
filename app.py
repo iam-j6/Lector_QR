@@ -38,23 +38,38 @@ def verify():
     try:
         sheet = get_sheets_client()
         
-        # 1. Obtener todos los IDs de la columna Q (17) de una vez
-        ids = sheet.col_values(17)[1:] 
+        # 1. Obtener todos los IDs de la columna Q (17)
+        ids = sheet.col_values(17)
         
+        # --- DIAGNÓSTICO ---
+        # Si la lista está vacía o solo tiene el encabezado, la hoja está mal.
+        if len(ids) <= 1:
+            return jsonify({
+                "status": "error", 
+                "message": f"⚠️ La columna Q (17) está VACÍA. Solo encontré: {ids}"
+            }), 400
+            
+        # Vamos a leer las últimas 5 filas para ver qué hay ahí
+        ultimos_ids = ids[-5:]
+        
+        # --- BÚSQUEDA CON LIMPIEZA ---
         fila_encontrada = None
-        for index, valor_celda in enumerate(ids):
-            # 2. Limpieza extrema: quitamos espacios, puntos y pasamos a mayúsculas
+        for index, valor_celda in enumerate(ids[1:]): # Empezamos desde la fila 2
             valor_limpio = str(valor_celda).strip().replace(".", "").upper()
             qr_limpio = qr_code.strip().replace(".", "").upper()
             
             if valor_limpio == qr_limpio and valor_limpio != "":
-                fila_encontrada = index + 2 # +2 porque empezamos desde la fila 2
+                fila_encontrada = index + 2
                 break
         
         if not fila_encontrada:
-            return jsonify({"status": "not_found", "message": "❌ Entrada no encontrada en el sistema."}), 404
+            # Si no lo encuentra, te muestra qué fue lo último que leyó de la hoja
+            return jsonify({
+                "status": "not_found", 
+                "message": f"❌ No encontré '{qr_limpio}'.\n\nLo último que leí en la Col Q fue:\n{ultimos_ids}"
+            }), 404
         
-        # 3. Leer datos (Según tu imagen: B=Apellido, C=Nombre, R=Estado)
+        # 3. Leer datos
         apellido = str(sheet.cell(fila_encontrada, 2).value or "")
         nombre = str(sheet.cell(fila_encontrada, 3).value or "")
         estado_actual = str(sheet.cell(fila_encontrada, 18).value or "").strip()
